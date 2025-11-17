@@ -260,6 +260,7 @@ int main() {
 	Model cube = Model::init("./assets/cube.obj", vao, model_plain_shader);
 	Model mouse = Model::init("./assets/mouse/mouse.gltf", vao, model_shader);
 	Model cat = Model::init("./assets/cat/bleh.gltf", vao, model_shader);
+	Model magic_tower_model = Model::init("./assets/wizard_tower/scene.gltf", vao, model_shader);
 
 	std::vector<Entity> enemies;
 
@@ -372,20 +373,72 @@ int main() {
 			animator.updateAnimation(state.dt/1000000.0f);
 
 			if (state.keys.left_click) {
+				float spd = 0.1f;
 				vec3 bullet_pos = player.pos + vec3(0.0, 2.0, 0.0);
-				vec3 velocity = glm::normalize(enemies[0].pos - bullet_pos) * 0.01f * dt_ms;
+				vec3 velocity = state.view.front * spd * dt_ms;
+				if (enemies.size() > 0) {
+					float dist2 = std::numeric_limits<float>::max();
+					vec3 line = vec3(0);
+					for (const auto& e : enemies) {
+						vec3 u = e.pos - bullet_pos;
+						float u_dist2 = glm::dot(u, u);
+						if (u_dist2 < dist2) {
+							line = u;
+							dist2 = u_dist2;
+						}
+					}
+					velocity = glm::normalize(line) * spd * dt_ms;
+				}
 				projectiles.push_back({
 					.model = &cube,
+					.scale = vec3(0.2),
 					.velocity = velocity,
 					.pos = bullet_pos,
 					.lifetime = 4.0,
 				});
 				state.keys.left_click = false;
 			}
+
 			if (state.keys.right_click) {
+				vec3 pos = player.pos;
+				pos.y = 0;
+				player_towers.push_back({
+					.model = &magic_tower_model,
+					.pos = pos,
+				});
+				state.keys.right_click = false;
+			}
+
+			{
+				for (const auto& t : player_towers) {
+					float spd = 0.1f;
+					if (enemies.size() > 0) {
+						vec3 bullet_pos = t.pos + vec3(0.0, 10.0, 0.0);
+						vec3 velocity = vec3(1.0, 0.0, 0.0);
+						float dist2 = std::numeric_limits<float>::max();
+						vec3 line = vec3(0);
+						for (const auto& e : enemies) {
+							vec3 u = e.pos - bullet_pos;
+							float u_dist2 = glm::dot(u, u);
+							if (u_dist2 < dist2) {
+								line = u;
+								dist2 = u_dist2;
+							}
+						}
+						velocity = glm::normalize(line) * spd * dt_ms;
+						projectiles.push_back({
+							.model = &cube,
+							.scale = vec3(0.2),
+							.velocity = velocity,
+							.pos = bullet_pos,
+							.lifetime = 1.0,
+						});
+					}
+				}
 			}
 
 			for (int i = projectiles.size() - 1; i >= 0; i--) {
+				// TODO: check collision
 				auto& p = projectiles[i];
 				p.pos += p.velocity;
 				if (p.lifetime <= 0) {
@@ -425,7 +478,7 @@ int main() {
 			state.updateModel(player.pos, player.scale, getAngle(vec2(1.0f, 0.0f), vec2(state.view.front.x, state.view.front.z)));
 			state.updateViewProj(player.pos);
 			state.uploadModelViewProj(ubo);
-			player.model->draw();
+			// player.model->draw();
 
 			for (const auto& p : projectiles) {
 				state.updateModel(p.pos, p.scale, p.angle);
@@ -435,6 +488,12 @@ int main() {
 
 			for (const auto& e : enemies) {
 				state.updateModel(e.pos, e.scale, e.angle);
+				state.uploadModel(ubo);
+				e.model->draw();
+			}
+
+			for (const auto& e : player_towers) {
+				state.updateModel(e.pos, e.scale, e.angle, -M_PI/2);
 				state.uploadModel(ubo);
 				e.model->draw();
 			}
