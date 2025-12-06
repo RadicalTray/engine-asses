@@ -246,7 +246,8 @@ int main() {
 
 		if (timer <= 0.0f) {
 			vec3 pos = vec3(dis(gen) * 360.0 - 180.0, 0.0, dis(gen) * 360.0 - 180.0);
-			enemies.push_back({ .model = &mouse, .scale = vec3(dis(gen)*15.0 + 1.0), .pos = pos });
+			float scale = dis(gen);
+			enemies.push_back({ .model = &mouse, .scale = vec3(scale*15.0 + 1.0), .pos = pos, .life = scale*100.0f });
 			timer = 0.4f;
 		} else {
 			timer -= state.dt / 1'000'000.0f;
@@ -281,6 +282,7 @@ int main() {
 			state.view.front.z = std::sin(cam_angle/180.0 * M_PI);
 			state.view.front = glm::normalize(state.view.front);
 
+			// TODO: tower bullet cooldown
 			for (const auto& t : player_towers) {
 				float spd = 0.1f;
 				if (enemies.size() > 0) {
@@ -310,18 +312,33 @@ int main() {
 			for (int i = projectiles.size() - 1; i >= 0; i--) {
 				// TODO: check collision
 				auto& p = projectiles[i];
-				p.pos += p.velocity;
 				if (p.life <= 0) {
 					// swap remove is faster but
 					// c++ stl fucking sucks and doesn't have the api for it
 					projectiles.erase(projectiles.begin() + i);
-				} else {
-					p.life -= dt_ms/1000;
+					continue;
+				}
+				p.life -= dt_ms/1000;
+				p.pos += p.velocity;
+
+				for (auto& e : enemies) {
+					// TODO: account for scaled up hitbox
+					vec3 u = e.pos - p.pos;
+					float u_dist2 = glm::dot(u, u);
+					float radius = 1.0f;
+					if (u_dist2 < radius*radius) {
+						e.life -= 1.0f;
+						projectiles.erase(projectiles.begin() + i);
+					}
 				}
 			}
 
 			for (int i = enemies.size() - 1; i >= 0; i--) {
 				auto& e = enemies[i];
+				if (e.life <= 0.0) {
+					enemies.erase(enemies.begin() + i);
+					continue;
+				}
 				auto line = tower.pos - e.pos;
 				line.y = 0.0;
 				auto dir = glm::normalize(line);
@@ -334,6 +351,7 @@ int main() {
 					// swap remove is faster but
 					// c++ stl fucking sucks and doesn't have the api for it
 					enemies.erase(enemies.begin() + i);
+					continue;
 				}
 			}
 
