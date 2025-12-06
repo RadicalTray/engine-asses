@@ -361,6 +361,15 @@ int main() {
 				auto origin = state.view.pos;
 				floor_point = origin + ((flr - origin.y)/direction.y)*direction;
 
+				if (state.keys.left_click) {
+					state.keys.left_click = false;
+					player_towers.push_back(Entity{
+						.model = &tower_model,
+						.scale = vec3(6.0f),
+						.pos = floor_point + vec3(0, 6, 0),
+					});
+				}
+
 				// if (state.keys.left_click) {
 				// 	float spd = 0.1f;
 				// 	vec3 bullet_pos = player.pos + vec3(0.0, 2.0, 0.0);
@@ -416,12 +425,12 @@ int main() {
 			}
 
 			for (const auto& e : player_towers) {
-				state.updateModel(e.pos, e.scale, e.angle, -M_PI/2);
+				state.updateModel(e.pos, e.scale, e.angle);
 				state.uploadModel(ubo);
 				e.model->draw();
 			}
 
-			state.updateModel(floor_point, tower.scale, tower.angle);
+			state.updateModel(floor_point + vec3(0, 6, 0), vec3(6), 0);
 			state.uploadModel(ubo);
 			tower.model->draw();
 
