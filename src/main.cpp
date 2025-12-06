@@ -162,6 +162,7 @@ struct Entity {
 	float angle = 0;
 	float life = 0;
 	float radius = 0;
+	float dmg = 0;
 };
 
 // TODO:
@@ -224,6 +225,7 @@ int main() {
 		.scale = vec3(12.0f),
 		.pos = vec3(0.0f, 12.0f, 0.0f),
 		.angle = 200.0/180.0 * M_PI,
+		.life = 100.0f,
 	};
 
 	std::vector<Entity> projectiles;
@@ -247,7 +249,7 @@ int main() {
 		if (timer <= 0.0f) {
 			vec3 pos = vec3(dis(gen) * 360.0 - 180.0, 0.0, dis(gen) * 360.0 - 180.0);
 			float scale = dis(gen);
-			enemies.push_back({ .model = &mouse, .scale = vec3(scale*15.0 + 1.0), .pos = pos, .life = scale*100.0f });
+			enemies.push_back({ .model = &mouse, .scale = vec3(scale*15.0 + 1.0), .pos = pos, .life = scale*100.0f, .dmg = scale*10.0f });
 			timer = 0.4f;
 		} else {
 			timer -= state.dt / 1'000'000.0f;
@@ -305,6 +307,7 @@ int main() {
 						.velocity = velocity,
 						.pos = bullet_pos,
 						.life = 1.0,
+						.dmg = 1.0,
 					});
 				}
 			}
@@ -350,9 +353,14 @@ int main() {
 				if (dist2 < radius*radius) {
 					// swap remove is faster but
 					// c++ stl fucking sucks and doesn't have the api for it
+					tower.life -= e.dmg;
 					enemies.erase(enemies.begin() + i);
 					continue;
 				}
+			}
+
+			if (tower.life <= 0) {
+				exit(0);
 			}
 
 			// view mat used in calculating mouse pos
