@@ -1,3 +1,13 @@
+// TODO:
+//  water
+//  shadow mapping
+//  circle hitbox around player
+//
+//  UI:
+//   - clickable towers and powers on the bottom of the screen
+//   - base hp
+//   - money
+
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 
@@ -24,11 +34,14 @@
 float getAngle(vec2 u, vec2 v);
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
 void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
+void topDownCursorPosCallback(GLFWwindow* window, double xpos, double ypos);
 void cursorPosCallback(GLFWwindow* window, double xpos, double ypos);
 void scrollCallback(GLFWwindow* window, double xoffset, double yoffset);
 void windowSizeCallback(GLFWwindow* window, int width, int height);
 
 struct Mouse {
+	double scr_x;
+	double scr_y;
 	double last_xpos;
 	double last_ypos;
 	double sens;
@@ -70,35 +83,25 @@ struct Keys {
 	bool tab;
 };
 
-enum PlayerState {
-	IDLE,
-	SWIM,
-	WALK,
-};
-
 struct State {
 	UniformBuffer ub;
 	Mouse mouse;
 	View view;
 	ivec2 scr_res;
-	int faces;
 	float dt;
 	Keys keys;
-	PlayerState player_state;
 
 	static State init(GLFWwindow *const window) {
 		State state = {};
-		state.player_state = IDLE;
-		state.faces = 4;
 		state.mouse = {
 			.sens = 0.1f,
 			.yaw = -90.0f,
 		};
 		state.view = {
-			.pos = vec3(0.0f, 0.0f, -1.0f),
-			.front = vec3(0.0f, 0.0f, -1.0f),
+			.pos = vec3(0.0f, 10.0f, 0.0f),
+			.front = glm::normalize(vec3(1.0f, -1.0f, 0.0f)),
 			.up = vec3(0.0f, 1.0f, 0.0f),
-			.fov = 90.0f,
+			.fov = 70.0f,
 			.speed = 0.032f,
 		};
 		state.ub = {
@@ -119,23 +122,16 @@ struct State {
 	}
 
 	void updateViewProj(vec3 pos) {
-		// pinned cam
-		vec3 radius = 4.0f * this->view.front;
-		pos.y += 2.5f;
-		this->ub.view = glm::lookAt(pos - radius, pos, this->view.up);
-		// free cam
-		// this->ub.view = glm::lookAt(this->view.pos, this->view.pos + this->view.front, this->view.up);
-
+		this->ub.view = glm::lookAt(this->view.pos, this->view.pos + this->view.front, this->view.up);
 		this->ub.projection = glm::perspective(glm::radians(this->view.fov), (float)this->scr_res.x / (float)this->scr_res.y, 0.1f, 10000.0f);
-
 		this->ub.view_pos = vec4(this->view.pos, 0.0f);
 	}
 
-	void uploadModelViewProj(uint ubo) {
+	void uploadModelViewProj(uint ubo) const {
 		glNamedBufferSubData(ubo, 0, 4*sizeof(mat4) + sizeof(vec4), &this->ub);
 	}
 
-	void uploadViewProj(uint ubo) {
+	void uploadViewProj(uint ubo) const {
 		glNamedBufferSubData(ubo, offsetof(UniformBuffer, view), 2*sizeof(mat4) + sizeof(vec4), &this->ub);
 	}
 
@@ -160,49 +156,12 @@ struct State {
 
 struct Entity {
 	Model* model;
-	Box hitbox = {};
 	vec3 scale = vec3(1.0);
 	vec3 velocity = vec3(0.0f);
 	vec3 pos = vec3(0.0f);
 	float angle = 0;
-	float lifetime = 0;
-
-	Box getBox(vec3 pos) const {
-		return this->hitbox.translate(pos - this->hitbox.max/2.0f);
-	}
-
-	bool collide(const vec3& new_pos, const Entity& obj) const {
-		Box new_box = this->getBox(new_pos);
-		Box obj_box = obj.getBox(obj.pos);
-
-		bool collision = true;
-		// Taken from raylib
-		if ((new_box.max.x >= obj_box.min.x) && (new_box.min.x <= obj_box.max.x)) {
-			if ((new_box.max.y < obj_box.min.y) || (new_box.min.y > obj_box.max.y)) collision = false;
-			if ((new_box.max.z < obj_box.min.z) || (new_box.min.z > obj_box.max.z)) collision = false;
-		} else {
-			collision = false;
-		}
-		return collision;
-
-	}
-
-	void snap(vec3& new_pos, const Entity& obj) {
-		vec3 old_pos = this->pos;
-		Box old_box = this->hitbox.translate(old_pos);
-		Box obj_box = obj.getBox(obj.pos);
-
-		vec3 diff = new_pos - old_pos;
-		if (this->collide(new_pos, obj)) {
-			if (diff.y < 0.0f) {
-				// if was on top
-				if (old_box.min.y >= obj_box.max.y) {
-					new_pos.y = obj_box.max.y;
-					this->velocity.y = 0;
-				}
-			}
-		}
-	}
+	float life = 0;
+	float radius = 0;
 };
 
 // TODO:
@@ -211,16 +170,20 @@ struct Entity {
 const float flr = 0.0f;
 const float gravity = 0.0002f;
 
+// TODO:
+float cam_angle = 0.0f;
+vec3 floor_point = vec3(0.0f);
+
 int main() {
 	GLFWwindow *window = init();
+	double scroll_xoffset;
 	State state = State::init(window);
 	glfwSetWindowUserPointer(window, reinterpret_cast<void *>(&state));
 	glfwSetKeyCallback(window, keyCallback);
 	glfwSetMouseButtonCallback(window, mouseButtonCallback);
-	glfwSetCursorPosCallback(window, cursorPosCallback);
+	glfwSetCursorPosCallback(window, topDownCursorPosCallback);
 	glfwSetScrollCallback(window, scrollCallback);
 	glfwSetWindowSizeCallback(window, windowSizeCallback);
-	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
 	std::random_device rd;
 	std::mt19937 gen(rd());
@@ -232,7 +195,6 @@ int main() {
 	glCreateVertexArrays(1, &vao);
 	glCreateBuffers(1, &ubo);
 
-	// TODO: make this createVAO
 	Vertex::setupVAO(vao);
 
 	glBindBufferBase(GL_UNIFORM_BUFFER, 0, ubo);
@@ -245,15 +207,7 @@ int main() {
 	const uint model_plain_shader = createShader("./shaders/model.vert", "./shaders/model_plain.frag");
 	const uint model_plain_anim_shader = createShader("./shaders/model_anim.vert", "./shaders/model_plain.frag");
 
-	// TODO: move this inside model
 	const int model_anim_shader_bone_matrices = glGetUniformLocation(model_plain_anim_shader, "boneMatrices");
-
-	Model model = Model::init("./assets/Dancing Twerk.dae", vao, model_plain_anim_shader);
-	auto dance_anim = Animation::init("./assets/Dancing Twerk.dae", model.bone_info_map);
-	auto swim_anim = Animation::init("./assets/Swimming.dae", model.bone_info_map);
-	auto walk_anim = Animation::init("./assets/Walking.dae", model.bone_info_map);
-	auto animator = Animator::init(&dance_anim);
-	assert(animator.bone_matrices.size() <= MAX_BONE_MATRICES);
 
 	Model tower_model = Model::init("./assets/fantasy_tower/scene.gltf", vao, model_shader);
 	Model map = Model::init("./assets/low_poly_island/scene.gltf", vao, model_shader);
@@ -261,17 +215,12 @@ int main() {
 	Model mouse = Model::init("./assets/mouse/mouse.gltf", vao, model_shader);
 	Model cat = Model::init("./assets/cat/bleh.gltf", vao, model_shader);
 	Model magic_tower_model = Model::init("./assets/wizard_tower/scene.gltf", vao, model_shader);
+	Model water = Model::init("./assets/water/water.gltf", vao, model_shader);
 
 	std::vector<Entity> enemies;
 
-	Entity player = {
-		.model = &model,
-		.hitbox = { .min = vec3(0.0f), .max = vec3(0.4f) },
-	};
-
 	Entity tower = {
 		.model = &tower_model,
-		.hitbox = { .min = vec3(0.0f), .max = vec3(0.4f) },
 		.scale = vec3(12.0f),
 		.pos = vec3(0.0f, 12.0f, 0.0f),
 		.angle = 200.0/180.0 * M_PI,
@@ -286,7 +235,7 @@ int main() {
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_CULL_FACE);
-	// glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+	glEnable(GL_MULTISAMPLE);
 
 	float timer = 0.0f;
 	auto start = chrono::steady_clock::now();
@@ -297,7 +246,7 @@ int main() {
 
 		if (timer <= 0.0f) {
 			vec3 pos = vec3(dis(gen) * 360.0 - 180.0, 0.0, dis(gen) * 360.0 - 180.0);
-			enemies.push_back({ .model = &mouse, .hitbox = { .min = vec3(0.0f), .max = vec3(0.4f) }, .scale = vec3(dis(gen)*15.0 + 1.0), .pos = pos });
+			enemies.push_back({ .model = &mouse, .scale = vec3(dis(gen)*15.0 + 1.0), .pos = pos });
 			timer = 0.4f;
 		} else {
 			timer -= state.dt / 1'000'000.0f;
@@ -316,67 +265,27 @@ int main() {
 			if (state.keys.s) dir -= forward;
 			if (state.keys.a) dir -= right;
 			if (state.keys.d) dir += right;
-			if (state.keys.space) player.velocity.y += 2.00f*gravity*dt_ms;
-
-			player.velocity.x = 0;
-			player.velocity.z = 0;
-                        player.velocity.y -= gravity*dt_ms;
 
 			if (dir != vec3(0.0)) {
-				vec3 vel = glm::normalize(dir)*state.view.speed*dt_ms;
-				player.velocity.x = vel.x;
-				player.velocity.z = vel.z;
+				state.view.pos += glm::normalize(dir) * state.view.speed * dt_ms;
 			}
 
-			vec3 new_pos = player.pos + player.velocity;
+			if (state.keys.space) state.view.pos += state.view.up * state.view.speed * dt_ms;
+			if (state.keys.shift) state.view.pos -= state.view.up * state.view.speed * dt_ms;
+			state.view.pos.y = std::clamp(state.view.pos.y, 10.0f, 100.0f);
 
-			if (new_pos.y < flr) {
-				new_pos.y = flr;
-				player.velocity.y = 0.0f;
-			}
+			if (state.keys.e) cam_angle += 0.1 * dt_ms;
+			if (state.keys.q) cam_angle -= 0.1 * dt_ms;
+			state.view.front.x = -std::cos(cam_angle/180.0 * M_PI);
+			state.view.front.y = -0.5f;
+			state.view.front.z = std::sin(cam_angle/180.0 * M_PI);
+			state.view.front = glm::normalize(state.view.front);
 
-			for (usize i = 0; i < enemies.size(); i++) {
-			}
-			player.pos = new_pos;
-
-			switch (state.player_state) {
-			case IDLE:
-				if (player.velocity.x != 0) {
-					if (new_pos.y == flr) {
-						state.player_state = WALK;
-						animator.playAnimation(&walk_anim);
-					} else {
-						state.player_state = SWIM;
-						animator.playAnimation(&walk_anim);
-					}
-				}
-				break;
-			case SWIM:
-				if (player.velocity.x == 0) {
-					state.player_state = IDLE;
-					animator.playAnimation(&walk_anim);
-				} else if (player.pos.y == flr) {
-					state.player_state = WALK;
-					animator.playAnimation(&walk_anim);
-				}
-				break;
-			case WALK:
-				if (player.velocity.x == 0) {
-					state.player_state = IDLE;
-					animator.playAnimation(&walk_anim);
-				} else if (player.pos.y > flr) {
-					state.player_state = SWIM;
-					animator.playAnimation(&swim_anim);
-				}
-				break;
-			}
-			animator.updateAnimation(state.dt/1000000.0f);
-
-			if (state.keys.left_click) {
+			for (const auto& t : player_towers) {
 				float spd = 0.1f;
-				vec3 bullet_pos = player.pos + vec3(0.0, 2.0, 0.0);
-				vec3 velocity = state.view.front * spd * dt_ms;
 				if (enemies.size() > 0) {
+					vec3 bullet_pos = t.pos + vec3(0.0, 10.0, 0.0);
+					vec3 velocity = vec3(1.0, 0.0, 0.0);
 					float dist2 = std::numeric_limits<float>::max();
 					vec3 line = vec3(0);
 					for (const auto& e : enemies) {
@@ -388,52 +297,13 @@ int main() {
 						}
 					}
 					velocity = glm::normalize(line) * spd * dt_ms;
-				}
-				projectiles.push_back({
-					.model = &cube,
-					.scale = vec3(0.2),
-					.velocity = velocity,
-					.pos = bullet_pos,
-					.lifetime = 4.0,
-				});
-				state.keys.left_click = false;
-			}
-
-			if (state.keys.right_click) {
-				vec3 pos = player.pos;
-				pos.y = 0;
-				player_towers.push_back({
-					.model = &magic_tower_model,
-					.pos = pos,
-				});
-				state.keys.right_click = false;
-			}
-
-			{
-				for (const auto& t : player_towers) {
-					float spd = 0.1f;
-					if (enemies.size() > 0) {
-						vec3 bullet_pos = t.pos + vec3(0.0, 10.0, 0.0);
-						vec3 velocity = vec3(1.0, 0.0, 0.0);
-						float dist2 = std::numeric_limits<float>::max();
-						vec3 line = vec3(0);
-						for (const auto& e : enemies) {
-							vec3 u = e.pos - bullet_pos;
-							float u_dist2 = glm::dot(u, u);
-							if (u_dist2 < dist2) {
-								line = u;
-								dist2 = u_dist2;
-							}
-						}
-						velocity = glm::normalize(line) * spd * dt_ms;
-						projectiles.push_back({
-							.model = &cube,
-							.scale = vec3(0.2),
-							.velocity = velocity,
-							.pos = bullet_pos,
-							.lifetime = 1.0,
-						});
-					}
+					projectiles.push_back({
+						.model = &cube,
+						.scale = vec3(0.2),
+						.velocity = velocity,
+						.pos = bullet_pos,
+						.life = 1.0,
+					});
 				}
 			}
 
@@ -441,12 +311,12 @@ int main() {
 				// TODO: check collision
 				auto& p = projectiles[i];
 				p.pos += p.velocity;
-				if (p.lifetime <= 0) {
+				if (p.life <= 0) {
 					// swap remove is faster but
 					// c++ stl fucking sucks and doesn't have the api for it
 					projectiles.erase(projectiles.begin() + i);
 				} else {
-					p.lifetime -= dt_ms/1000;
+					p.life -= dt_ms/1000;
 				}
 			}
 
@@ -466,19 +336,72 @@ int main() {
 					enemies.erase(enemies.begin() + i);
 				}
 			}
+
+			// view mat used in calculating mouse pos
+			state.updateViewProj(state.view.pos);
+			state.uploadModelViewProj(ubo);
+
+			{ // calc mouse pos to floor
+				float x = (2.0f*state.mouse.scr_x)/(float)state.scr_res.x - 1.0f;
+				float y = 1.0f - (2.0f*state.mouse.scr_y)/(float)state.scr_res.y;
+				float z = 1.0f;
+
+				auto dev_coords = vec3(x, y, z);
+				auto view = state.ub.view;
+				auto proj = state.ub.projection;
+				auto view_proj = proj*view;
+				auto view_proj_inv = glm::inverse(view_proj);
+
+				auto near_quat = view_proj_inv*vec4(dev_coords.x, dev_coords.y, 0.0f, 1.0f);
+				auto near = vec3(near_quat.x, near_quat.y, near_quat.z)/near_quat.w;
+				auto far_quat = view_proj_inv*vec4(dev_coords.x, dev_coords.y, 1.0f, 1.0f);
+				auto far = vec3(far_quat.x, far_quat.y, far_quat.z)/far_quat.w;
+
+				auto direction = glm::normalize(far - near);
+				auto origin = state.view.pos;
+				floor_point = origin + ((flr - origin.y)/direction.y)*direction;
+
+				// if (state.keys.left_click) {
+				// 	float spd = 0.1f;
+				// 	vec3 bullet_pos = player.pos + vec3(0.0, 2.0, 0.0);
+				// 	vec3 velocity = state.view.front * spd * dt_ms;
+				// 	if (enemies.size() > 0) {
+				// 		float dist2 = std::numeric_limits<float>::max();
+				// 		vec3 line = vec3(0);
+				// 		for (const auto& e : enemies) {
+				// 			vec3 u = e.pos - bullet_pos;
+				// 			float u_dist2 = glm::dot(u, u);
+				// 			if (u_dist2 < dist2) {
+				// 				line = u;
+				// 				dist2 = u_dist2;
+				// 			}
+				// 		}
+				// 		velocity = glm::normalize(line) * spd * dt_ms;
+				// 	}
+				// 	projectiles.push_back({
+				// 		.model = &cube,
+				// 		.scale = vec3(0.2),
+				// 		.velocity = velocity,
+				// 		.pos = bullet_pos,
+				// 		.life = 4.0,
+				// 	});
+				// 	state.keys.left_click = false;
+				// }
+				//
+				// if (state.keys.right_click) {
+				// 	vec3 pos = player.pos;
+				// 	pos.y = 0;
+				// 	player_towers.push_back({
+				// 		.model = &magic_tower_model,
+				// 		.pos = pos,
+				// 	});
+				// 	state.keys.right_click = false;
+				// }
+			}
 		}
 		{ // render
 			glClearColor(0.0f, 0.0f, 0.0f, 1.00f);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-			// render player model
-			const auto& transforms = animator.bone_matrices;
-			glProgramUniformMatrix4fv(model_plain_anim_shader, model_anim_shader_bone_matrices, transforms.size(), false, glm::value_ptr(transforms[0]));
-
-			state.updateModel(player.pos, player.scale, getAngle(vec2(1.0f, 0.0f), vec2(state.view.front.x, state.view.front.z)));
-			state.updateViewProj(player.pos);
-			state.uploadModelViewProj(ubo);
-			// player.model->draw();
 
 			for (const auto& p : projectiles) {
 				state.updateModel(p.pos, p.scale, p.angle);
@@ -498,6 +421,10 @@ int main() {
 				e.model->draw();
 			}
 
+			state.updateModel(floor_point, tower.scale, tower.angle);
+			state.uploadModel(ubo);
+			tower.model->draw();
+
 			state.updateModel(tower.pos, tower.scale, tower.angle);
 			state.uploadModel(ubo);
 			tower.model->draw();
@@ -505,6 +432,10 @@ int main() {
 			state.updateModel(vec3(0.0f, -2.0f, 0.0f), vec3(32.0f, 1.0f, 32.0f), 0);
 			state.uploadModel(ubo);
 			map.draw();
+
+			state.updateModel(vec3(0, -1.0, 0), vec3(1024.0f, 1.0f, 1024.0f), 0);
+			state.uploadModel(ubo);
+			water.draw();
 
 			// render cube map
 			mat4 view = glm::lookAt(vec3(0.0), state.view.front, state.view.up);
@@ -644,6 +575,12 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
 		}
 		break;
 	}
+}
+
+void topDownCursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
+	State *state = reinterpret_cast<State*>(glfwGetWindowUserPointer(window));
+	state->mouse.scr_x = xpos;
+	state->mouse.scr_y = ypos;
 }
 
 void cursorPosCallback(GLFWwindow* window, double xpos, double ypos) {

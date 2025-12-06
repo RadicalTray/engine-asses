@@ -28,6 +28,7 @@ std::string readFile(const char *const filepath);
 GLFWwindow* init() {
 	glfwInit();
 
+	glfwWindowHint(GLFW_SAMPLES, 4);
 	GLFWwindow* window = glfwCreateWindow(1600, 900, "uwu", NULL, NULL);
 	if (window == NULL) {
 		std::cerr << "Failed to create GLFW window" << std::endl;
@@ -363,3 +364,7 @@ struct CubeMap {
 		glDepthFunc(old_depth_func);
 	}
 };
+
+float getFactor(float last, float next, float x) {
+	return (x - last) / (next - last);
+}

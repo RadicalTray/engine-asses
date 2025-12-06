@@ -12,8 +12,6 @@
 
 #include <utils.hpp>
 
-float getFactor(float last, float next, float x);
-
 struct KeyPosition {
 	glm::vec3 pos;
 	float timestamp;
@@ -143,7 +141,3 @@ struct Bone {
 		assert(0);
 	}
 };
-
-float getFactor(float last, float next, float x) {
-	return (x - last) / (next - last);
-}
