@@ -16,7 +16,7 @@ https://github.com/user-attachments/assets/ada0ebdb-d644-4ef6-a114-6887ad86a614
 
 
 
-**itch.io** [https://radicaltray.itch.io/diddy-tower]()
+**itch.io** [](https://radicaltray.itch.io/diddy-tower)
 
 ## Attribution
 
