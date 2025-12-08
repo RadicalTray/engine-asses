@@ -267,8 +267,6 @@ int main() {
 	Model map = Model::init("./assets/low_poly_island/scene.gltf", vao, model_shader);
 	Model cube = Model::init("./assets/cube.obj", vao, model_plain_shader);
 	Model mouse = Model::init("./assets/mouse/mouse.gltf", vao, model_shader);
-	Model cat = Model::init("./assets/cat/bleh.gltf", vao, model_shader);
-	Model magic_tower_model = Model::init("./assets/wizard_tower/scene.gltf", vao, model_shader);
 	Model water = Model::init("./assets/water/water.gltf", vao, model_shader);
 
 	uint endless_focused = texture2DFromFile("./assets/ui/endless_focused.png", 1, 4);
