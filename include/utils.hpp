@@ -138,7 +138,6 @@ uint texture2DFromFile(const char* filepath, int levels, int preferred_channels 
 			std::cerr << "error: " << filepath << "wtf is this format?" << std::endl;
 			break;
 		}
-		std::cout << filepath << ": " << n_channels << std::endl;
 		glTextureStorage2D(tex, levels, internalformat, width, height);
 		glTextureSubImage2D(tex, 0, 0, 0, width, height, format, GL_UNSIGNED_BYTE, data);
 		glTextureParameteri(tex, GL_TEXTURE_MIN_FILTER, GL_NEAREST);

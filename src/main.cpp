@@ -335,7 +335,6 @@ int main() {
 			if (rat < 1.0f) {
 				pos *= 1/rat;
 			}
-			std::cout << rat << " " << glm::length(tower.pos - pos)/150.0f << std::endl;
 			float angle = getAngle(vec2(1.0, 0.0), vec2(dir.x, dir.z));
 			float scale = dis(gen)*enemy_scaling + 1;
 			enemies.push_back(Entity{
