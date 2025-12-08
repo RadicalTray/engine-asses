@@ -106,14 +106,15 @@ debugMessageCallback(
 	std::cerr << "gl(" << type_str << "): " << message << std::endl;
 }
 
-uint texture2DFromFile(const char* filepath, int levels) {
+uint texture2DFromFile(const char* filepath, int levels, int preferred_channels = 0) {
 	stbi_set_flip_vertically_on_load(true); // opengl/glfw dum dum
 
 	uint tex;
 	glCreateTextures(GL_TEXTURE_2D, 1, &tex);
 
 	int width, height, n_channels;
-	uchar *data = stbi_load(filepath, &width, &height, &n_channels, 0);
+	uchar *data = stbi_load(filepath, &width, &height, &n_channels, preferred_channels);
+	if (preferred_channels != 0) { n_channels = preferred_channels; }
 	if (data) {
 		GLenum internalformat = GL_R8, format = GL_RED;
 		switch (n_channels) {
@@ -137,8 +138,11 @@ uint texture2DFromFile(const char* filepath, int levels) {
 			std::cerr << "error: " << filepath << "wtf is this format?" << std::endl;
 			break;
 		}
+		std::cout << filepath << ": " << n_channels << std::endl;
 		glTextureStorage2D(tex, levels, internalformat, width, height);
 		glTextureSubImage2D(tex, 0, 0, 0, width, height, format, GL_UNSIGNED_BYTE, data);
+		glTextureParameteri(tex, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTextureParameteri(tex, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 		glGenerateTextureMipmap(tex);
 	} else {
 		std::cerr << "stbi(error): " << stbi_failure_reason() << " (" << filepath << ")" << std::endl;

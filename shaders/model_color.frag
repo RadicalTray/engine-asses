@@ -28,7 +28,7 @@ layout(location = 3) uniform sampler2D height_texture;
 layout(location = 4) uniform vec4 u_color;
 
 void main() {
-	vec4 color = u_color;
+	vec4 color = mix(texture(diffuse_texture, vsOut.TexCoord), u_color, 0.2);
 	vec3 ambient = ambientStr * ambientClr.xyz;
 
 	vec3 norm = normalize(vsOut.Normal);

@@ -63,3 +63,18 @@ struct Vertex {
 		glVertexArrayAttribBinding(vao, 7, 0);
 	}
 };
+
+struct UIVertex {
+	vec2 pos;
+	vec2 tex;
+
+	static void setupVAO(uint vao) {
+		glEnableVertexArrayAttrib(vao,  0);
+		glVertexArrayAttribFormat(vao,  0, 2, GL_FLOAT, GL_FALSE, offsetof(UIVertex, pos));
+		glVertexArrayAttribBinding(vao, 0, 0);
+
+		glEnableVertexArrayAttrib(vao,  1);
+		glVertexArrayAttribFormat(vao,  1, 2, GL_FLOAT, GL_FALSE, offsetof(UIVertex, tex));
+		glVertexArrayAttribBinding(vao, 1, 0);
+	}
+};
