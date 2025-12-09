@@ -221,7 +221,7 @@ int main() {
 	glCreateVertexArrays(1, &ui_vao);
 	UIVertex::setupVAO(ui_vao);
 
-	uint ui_b[3];
+	uint ui_b[4];
 	glCreateBuffers(4, ui_b);
 	uint ui_vbo = ui_b[0], ui_ebo = ui_b[1], num_vbo = ui_b[2], num_ebo = ui_b[3];
 	glNamedBufferData(ui_vbo, square_uiverts.size() * sizeof(UIVertex), square_uiverts.data(), GL_STATIC_DRAW);
